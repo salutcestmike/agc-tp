@@ -93,7 +93,6 @@ def read_fasta(amplicon_file: Path, minseqlen: int) -> Iterator[str]:
                     sequence = ""
                 else:
                     sequence += line
-            # Derniere sequence du fichier
             if len(sequence) >= minseqlen:
                 yield sequence
 
@@ -107,7 +106,6 @@ def dereplication_fulllength(amplicon_file: Path, minseqlen: int, mincount: int)
     :return: A generator object that provides a (list)[sequences, count] of sequence with a count >= mincount and a length >= minseqlen.
     """
     seq_counter = Counter(read_fasta(amplicon_file, minseqlen))
-    # most_common retourne les sequences par ordre decroissant d'occurrence
     for sequence, count in seq_counter.most_common():
         if count >= mincount:
             yield [sequence, count]
@@ -118,7 +116,9 @@ def get_identity(alignment_list: List[str]) -> float:
     :param alignment_list:  (list) A list of aligned sequences in the format ["SE-QUENCE1", "SE-QUENCE2"]
     :return: (float) The rate of identity between the two sequences.
     """
-    pass
+    seq1, seq2 = alignment_list[0], alignment_list[1]
+    nb_identical = sum(1 for nuc1, nuc2 in zip(seq1, seq2) if nuc1 == nuc2)
+    return nb_identical / len(seq1) * 100
 
 def abundance_greedy_clustering(amplicon_file: Path, minseqlen: int, mincount: int, chunk_size: int, kmer_size: int) -> List:
     """Compute an abundance greedy clustering regarding sequence count and identity.
@@ -131,7 +131,20 @@ def abundance_greedy_clustering(amplicon_file: Path, minseqlen: int, mincount: i
     :param kmer_size: (int) A fournir mais non utilise cette annee
     :return: (list) A list of all the [OTU (str), count (int)] .
     """
-    pass
+    _ = (chunk_size, kmer_size)
+    matrix = str(Path(__file__).parent / "MATCH")
+    otu_list = []
+    for sequence, count in dereplication_fulllength(amplicon_file, minseqlen, mincount):
+        is_otu = True
+        for otu_seq, _ in otu_list:
+            alignment = nw.global_align(sequence, otu_seq, gap_open=-1, gap_extend=-1,
+                                        matrix=matrix)
+            if get_identity(alignment) > 97:
+                is_otu = False
+                break
+        if is_otu:
+            otu_list.append([sequence, count])
+    return otu_list
 
 
 def write_OTU(OTU_list: List, output_file: Path) -> None:
@@ -140,7 +153,11 @@ def write_OTU(OTU_list: List, output_file: Path) -> None:
     :param OTU_list: (list) A list of OTU sequences
     :param output_file: (Path) Path to the output file
     """
-    pass
+    with open(output_file, "w", encoding="utf-8") as file:
+        for index, (sequence, count) in enumerate(OTU_list, start=1):
+            file.write(f">OTU_{index} occurrence:{count}\n")
+            file.write(f"{textwrap.fill(sequence, width=80)}\n")
+
 
 
 #==============================================================
